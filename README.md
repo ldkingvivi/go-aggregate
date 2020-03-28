@@ -1,4 +1,6 @@
 # go-aggregate
+[![License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](http://opensource.org/licenses/MIT)
+[![Actions Status](https://github.com/ldkingvivi/go-aggregate/workflows/Go/badge.svg)](https://github.com/ldkingvivi/go-aggregate/actions)
 
 this is the go implementation of the original aggregate from [@horms]( https://github.com/horms) on linux back in 2002
 
