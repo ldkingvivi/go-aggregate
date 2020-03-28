@@ -46,6 +46,16 @@ func TestAggregateStr(t *testing.T) {
 	for i, c := range []struct {
 		in, want []string
 	}{
+		// Empty
+		{
+			[]string{},
+			[]string{},
+		},
+		// Single
+		{
+			[]string{"8.8.8.0/24"},
+			[]string{"8.8.8.0/24"},
+		},
 		// IPv4 prefixes
 		{
 			[]string{
@@ -268,7 +278,7 @@ func TestAggregateStr(t *testing.T) {
 				"::/0",
 			},
 		},
-		// mix IPv4 and IPv6
+		// Mix IPv4 and IPv6
 		{
 			[]string{
 				"192.0.2.0/29", "192.0.2.8/29", "192.0.2.16/29", "192.0.2.24/29",
@@ -309,6 +319,16 @@ func TestAggregateIPnet(t *testing.T) {
 	for i, c := range []struct {
 		in, want []string
 	}{
+		// Empty
+		{
+			[]string{},
+			[]string{},
+		},
+		// Single
+		{
+			[]string{"8.8.8.0/24"},
+			[]string{"8.8.8.0/24"},
+		},
 		// IPv4 prefixes
 		{
 			[]string{
@@ -531,7 +551,7 @@ func TestAggregateIPnet(t *testing.T) {
 				"::/0",
 			},
 		},
-		// mix IPv4 and IPv6
+		// Mix IPv4 and IPv6
 		{
 			[]string{
 				"192.0.2.0/29", "192.0.2.8/29", "192.0.2.16/29", "192.0.2.24/29",
