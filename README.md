@@ -58,3 +58,15 @@ func main() {
 }
 
 ```
+
+BenchMark
+
+```
+goos: darwin
+goarch: amd64
+pkg: github.com/ldkingvivi/go-aggregate
+BenchmarkAggregateStr-12      	   45955	     25436 ns/op	   19728 B/op	     387 allocs/op
+BenchmarkAggregateIPNet-12    	   68146	     17463 ns/op	   15440 B/op	     204 allocs/op
+PASS
+ok  	github.com/ldkingvivi/go-aggregate	3.484s
+```
