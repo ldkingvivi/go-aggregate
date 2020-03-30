@@ -113,5 +113,5 @@ goarch: amd64
 pkg: github.com/ldkingvivi/go-aggregate
 BenchmarkAggregateMergeAddCount-12        	   65290	     17640 ns/op	   18056 B/op	     204 allocs/op
 BenchmarkAggregateMergeUseDeletNote-12    	   66913	     17600 ns/op	   18056 B/op	     204 allocs/op
-BenchmarkAggregateMergeDoNothing-12       	   67716	     17702 ns/op	   18056 B/op	     204 allocs/op	     204 allocs/op
+BenchmarkAggregateMergeDoNothing-12       	   67716	     17702 ns/op	   18056 B/op	     204 allocs/op
 ```
