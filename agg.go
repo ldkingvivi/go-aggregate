@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"net"
 	"sort"
-	"strconv"
 )
 
 type cidr struct {
@@ -16,47 +15,76 @@ type cidr struct {
 
 	prev *cidr
 	next *cidr
+
+	entry CidrEntry
 }
 
-func AggregateIPNet(cidrIPNet []*net.IPNet) ([]*net.IPNet, error) {
-
-	if len(cidrIPNet) < 2 {
-		// let's do nothing if there's only 0 or 1 element
-		return cidrIPNet, nil
-	}
-
-	cidrs := run(cidrIPNet)
-	return getIPNet(cidrs), nil
+type CidrEntry interface {
+	GetNetwork() *net.IPNet
+	SetNetwork(*net.IPNet)
+	GetCount() int
+	SetCount(int)
 }
 
-func AggregateStr(cidrStrings []string) ([]string, error) {
+type basicCidrEntry struct {
+	ipNet *net.IPNet
+	count int
+}
 
-	if len(cidrStrings) < 2 {
-		// let's do nothing if there's only 0 or 1 element
-		return cidrStrings, nil
+func (b *basicCidrEntry) GetNetwork() *net.IPNet {
+	return b.ipNet
+}
+
+func (b *basicCidrEntry) SetNetwork(ipNet *net.IPNet) {
+	b.ipNet = ipNet
+}
+
+func (b *basicCidrEntry) GetCount() int {
+	return b.count
+}
+
+func (b *basicCidrEntry) SetCount(count int) {
+	b.count = count
+}
+
+func NewBasicCidrEntry(ipNet *net.IPNet, count int) CidrEntry {
+	return &basicCidrEntry{
+		ipNet: ipNet,
+		count: count,
 	}
+}
 
-	var ipnets []*net.IPNet
+func Aggregate(cidrEntries []CidrEntry) ([]CidrEntry, error) {
+	if len(cidrEntries) < 2 {
+		return cidrEntries, nil
+	}
+	cidrs := run(cidrEntries)
+	return getEntries(cidrs), nil
+}
+
+func run(cidrEntries []CidrEntry) []cidr {
 	// convert
-	for _, c := range cidrStrings {
-		// convert
-		_, ipnet, err := net.ParseCIDR(c)
-		if err != nil {
-			return []string{}, err
-		}
-		ipnets = append(ipnets, ipnet)
-	}
+	cidrs := convertToCidr(cidrEntries)
+	// sort it
+	sortIt(cidrs)
+	// add pointer
+	addPointer(cidrs)
+	// unlink the smaller ones that already in bigger ones
+	unlinkCovered(cidrs)
+	// do the aggregate
+	aggregateAdj(cidrs)
 
-	cidrs := run(ipnets)
-	return getStrings(cidrs), nil
+	return cidrs
 }
 
-func convertIPNetToCidr(ipnets []*net.IPNet) []cidr {
+func convertToCidr(cidrEntries []CidrEntry) []cidr {
 	var cidrs []cidr
 	bigOne := big.NewInt(1)
-
+	var ipnet *net.IPNet
 	// convert
-	for _, ipnet := range ipnets {
+	for _, cidrEntry := range cidrEntries {
+		ipnet = cidrEntry.GetNetwork()
+
 		// cover IPv6
 		startIP := big.NewInt(0)
 		startIP.SetBytes(ipnet.IP)
@@ -75,23 +103,9 @@ func convertIPNetToCidr(ipnets []*net.IPNet) []cidr {
 			nextStartIP: nextStartIP,
 			ones:        ones,
 			bits:        bits,
+			entry:       cidrEntry,
 		})
 	}
-
-	return cidrs
-}
-
-func run(ipnets []*net.IPNet) []cidr {
-	// convert
-	cidrs := convertIPNetToCidr(ipnets)
-	// sort it
-	sortIt(cidrs)
-	// add pointer
-	addPointer(cidrs)
-	// unlink the smaller ones that already in bigger ones
-	unlinkCovered(cidrs)
-	// do the aggregate
-	aggregateAdj(cidrs)
 
 	return cidrs
 }
@@ -126,6 +140,8 @@ func unlinkCovered(cidrs []cidr) {
 
 	for nextP != nil {
 		if currentP.nextStartIP.Cmp(nextP.nextStartIP) >= 0 {
+			// add the next one's counter to current one
+			currentP.entry.SetCount(currentP.entry.GetCount() + nextP.entry.GetCount())
 			// skip the next
 			currentP.next = nextP.next
 			if nextP.next != nil {
@@ -153,6 +169,8 @@ func aggregateAdj(cidrs []cidr) {
 			// no need to change the netIP
 			currentP.nextStartIP = nextP.nextStartIP
 			currentP.ones = currentP.ones - 1
+			// update current counter
+			currentP.entry.SetCount(currentP.entry.GetCount() + nextP.entry.GetCount())
 
 			// redo the link
 			currentP.next = nextP.next
@@ -176,27 +194,19 @@ func aggregateAdj(cidrs []cidr) {
 	}
 }
 
-func getStrings(cidrs []cidr) []string {
-	var r []string
+func getEntries(cidrs []cidr) []CidrEntry {
+	var r []CidrEntry
 	currentP := &cidrs[0]
-
 	for currentP != nil {
-		r = append(r, currentP.netIP.String()+"/"+strconv.Itoa(currentP.ones))
-		currentP = currentP.next
-	}
-	return r
-}
-
-func getIPNet(cidrs []cidr) []*net.IPNet {
-	var r []*net.IPNet
-	currentP := &cidrs[0]
-
-	for currentP != nil {
-
-		r = append(r, &net.IPNet{
-			IP:   currentP.netIP,
-			Mask: net.CIDRMask(currentP.ones, currentP.bits),
-		})
+		// update the entry network
+		currentP.entry.SetNetwork(
+			&net.IPNet{
+				IP:   currentP.netIP,
+				Mask: net.CIDRMask(currentP.ones, currentP.bits),
+			})
+		// added to results
+		r = append(r, currentP.entry)
+		// move to next
 		currentP = currentP.next
 	}
 	return r
