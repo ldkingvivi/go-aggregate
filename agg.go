@@ -22,13 +22,10 @@ type cidr struct {
 type CidrEntry interface {
 	GetNetwork() *net.IPNet
 	SetNetwork(*net.IPNet)
-	GetCount() int
-	SetCount(int)
 }
 
 type basicCidrEntry struct {
 	ipNet *net.IPNet
-	count int
 }
 
 func (b *basicCidrEntry) GetNetwork() *net.IPNet {
@@ -39,22 +36,15 @@ func (b *basicCidrEntry) SetNetwork(ipNet *net.IPNet) {
 	b.ipNet = ipNet
 }
 
-func (b *basicCidrEntry) GetCount() int {
-	return b.count
-}
-
-func (b *basicCidrEntry) SetCount(count int) {
-	b.count = count
-}
-
-func NewBasicCidrEntry(ipNet *net.IPNet, count int) CidrEntry {
+func NewBasicCidrEntry(ipNet *net.IPNet) CidrEntry {
 	return &basicCidrEntry{
 		ipNet: ipNet,
-		count: count,
 	}
 }
 
-func Aggregate(cidrEntries []CidrEntry) ([]CidrEntry, error) {
+type Merge func(keep, delete CidrEntry)
+
+func Aggregate(cidrEntries []CidrEntry, mergeFn Merge) ([]CidrEntry, error) {
 	if len(cidrEntries) < 2 {
 		return cidrEntries, nil
 	}
@@ -64,9 +54,9 @@ func Aggregate(cidrEntries []CidrEntry) ([]CidrEntry, error) {
 	// add pointer
 	addPointer(cidrs)
 	// unlink the smaller ones that already in bigger ones
-	unlinkCovered(cidrs)
+	unlinkCovered(cidrs, mergeFn)
 	// do the aggregate
-	aggregateAdj(cidrs)
+	aggregateAdj(cidrs, mergeFn)
 
 	return getEntries(cidrs), nil
 }
@@ -127,15 +117,15 @@ func addPointer(cidrs []cidr) {
 	}
 }
 
-func unlinkCovered(cidrs []cidr) {
+func unlinkCovered(cidrs []cidr, mergeFn Merge) {
 	// check already done from Aggregate()
 	currentP := &cidrs[0]
 	nextP := currentP.next
 
 	for nextP != nil {
 		if currentP.nextStartIP.Cmp(nextP.nextStartIP) >= 0 {
-			// add the next one's counter to current one
-			currentP.entry.SetCount(currentP.entry.GetCount() + nextP.entry.GetCount())
+			// run the merge func
+			mergeFn(currentP.entry, nextP.entry)
 			// skip the next
 			currentP.next = nextP.next
 			if nextP.next != nil {
@@ -149,7 +139,7 @@ func unlinkCovered(cidrs []cidr) {
 	}
 }
 
-func aggregateAdj(cidrs []cidr) {
+func aggregateAdj(cidrs []cidr, mergeFn Merge) {
 	// check already done from Aggregate()
 	currentP := &cidrs[0]
 	nextP := currentP.next
@@ -163,8 +153,8 @@ func aggregateAdj(cidrs []cidr) {
 			// no need to change the netIP
 			currentP.nextStartIP = nextP.nextStartIP
 			currentP.ones = currentP.ones - 1
-			// update current counter
-			currentP.entry.SetCount(currentP.entry.GetCount() + nextP.entry.GetCount())
+			// run the merge func
+			mergeFn(currentP.entry, nextP.entry)
 
 			// redo the link
 			currentP.next = nextP.next

@@ -43,7 +43,55 @@ type testResults struct {
 	count       int
 }
 
-func TestAggregate(t *testing.T) {
+type customCidrEntry struct {
+	ipNet *net.IPNet
+	count int
+	note  string
+}
+
+func (c *customCidrEntry) GetNetwork() *net.IPNet {
+	return c.ipNet
+}
+
+func (c *customCidrEntry) SetNetwork(ipNet *net.IPNet) {
+	c.ipNet = ipNet
+}
+
+func (c *customCidrEntry) GetCount() int {
+	return c.count
+}
+
+func (c *customCidrEntry) SetCount(count int) {
+	c.count = count
+}
+
+func NewCustomCidrEntry(ipNet *net.IPNet, count int, note string) CidrEntry {
+	return &customCidrEntry{
+		ipNet: ipNet,
+		count: count,
+		note:  note,
+	}
+}
+
+func mergeAddCount(k, d CidrEntry) {
+	sk, _ := k.(*customCidrEntry)
+	sd, _ := d.(*customCidrEntry)
+
+	sk.count += sd.count
+}
+
+func mergeUseDeleteNote(k, d CidrEntry) {
+
+	sk, _ := k.(*customCidrEntry)
+	sd, _ := d.(*customCidrEntry)
+
+	sk.note = sd.note
+}
+
+func mergeDoNothing(_, _ CidrEntry) {
+}
+
+func TestAggregateAddCount(t *testing.T) {
 
 	var got []CidrEntry
 	var err error
@@ -435,15 +483,15 @@ func TestAggregate(t *testing.T) {
 
 		for _, s := range c.in {
 			_, ipnet, _ := net.ParseCIDR(s)
-			cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet, 1))
+			cidrEntries = append(cidrEntries, NewCustomCidrEntry(ipnet, 1, "US"))
 		}
 
 		for _, s := range c.want {
 			_, ipnet, _ := net.ParseCIDR(s.ipnetString)
-			cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet, s.count))
+			cidrWant = append(cidrWant, NewCustomCidrEntry(ipnet, s.count, "US"))
 		}
 
-		got, err = Aggregate(cidrEntries)
+		got, err = Aggregate(cidrEntries, mergeAddCount)
 		if err != nil {
 			t.Errorf("%+v", err)
 		}
@@ -454,7 +502,7 @@ func TestAggregate(t *testing.T) {
 	}
 }
 
-func TestAggregateWithCount(t *testing.T) {
+func TestAggregateWithGivenCount(t *testing.T) {
 
 	var input = []testResults{
 		{
@@ -481,10 +529,10 @@ func TestAggregateWithCount(t *testing.T) {
 	var inputCidrs []CidrEntry
 	for _, s := range input {
 		_, ipnet, _ := net.ParseCIDR(s.ipnetString)
-		inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet, s.count))
+		inputCidrs = append(inputCidrs, NewCustomCidrEntry(ipnet, s.count, "US"))
 	}
 
-	got, err := Aggregate(inputCidrs)
+	got, err := Aggregate(inputCidrs, mergeAddCount)
 	if err != nil {
 		t.Errorf("%+v", err)
 	}
@@ -492,16 +540,79 @@ func TestAggregateWithCount(t *testing.T) {
 	var cidrWant []CidrEntry
 	for _, s := range want {
 		_, ipnet, _ := net.ParseCIDR(s.ipnetString)
-		cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet, s.count))
+		cidrWant = append(cidrWant, NewCustomCidrEntry(ipnet, s.count, "US"))
 	}
 
 	if !reflect.DeepEqual(got, cidrWant) {
 		t.Errorf("expect: %+v , but got %+v", cidrWant, got)
 	}
-
 }
 
-func BenchmarkAggregateIPNet(b *testing.B) {
+func TestAggregateWithMergeDeleteNote(t *testing.T) {
+
+	// example use custom interface
+	_, xNet, _ := net.ParseCIDR("8.8.8.128/25")
+	_, yNet, _ := net.ParseCIDR("8.8.8.0/25")
+
+	x := NewCustomCidrEntry(xNet, 10, "US")
+	y := NewCustomCidrEntry(yNet, 20, "CA")
+
+	got, err := Aggregate([]CidrEntry{x, y}, mergeUseDeleteNote)
+	if err != nil {
+		t.Errorf("%+v", err)
+	}
+
+	if len(got) != 1 {
+		t.Errorf("expect single results")
+	}
+
+	gotS, ok := got[0].(*customCidrEntry)
+	if !ok {
+		t.Errorf("%+v", err)
+	}
+
+	expect := "US"
+
+	if gotS.note != expect {
+		t.Errorf("expect %s, but got %s", expect, gotS.note)
+	}
+}
+
+func TestAggregateWithMergeDoNothing(t *testing.T) {
+
+	var input = []string{
+		"8.8.9.128/25",
+		"8.8.8.0/24",
+		"8.8.9.0/25",
+	}
+
+	var want = []string{
+		"8.8.8.0/23",
+	}
+
+	var inputCidrs []CidrEntry
+	for _, s := range input {
+		_, ipnet, _ := net.ParseCIDR(s)
+		inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
+	}
+
+	got, err := Aggregate(inputCidrs, mergeDoNothing)
+	if err != nil {
+		t.Errorf("%+v", err)
+	}
+
+	var cidrWant []CidrEntry
+	for _, s := range want {
+		_, ipnet, _ := net.ParseCIDR(s)
+		cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet))
+	}
+
+	if !reflect.DeepEqual(got, cidrWant) {
+		t.Errorf("expect: %+v , but got %+v", cidrWant, got)
+	}
+}
+
+func BenchmarkAggregateMergeAddCount(b *testing.B) {
 	input := []string{
 		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
 		"192.0.2.0/29", "192.0.2.8/29", "192.0.2.16/29", "192.0.2.24/29",
@@ -519,11 +630,65 @@ func BenchmarkAggregateIPNet(b *testing.B) {
 	var cidrEntries []CidrEntry
 	for _, s := range input {
 		_, ipnet, _ := net.ParseCIDR(s)
-		cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet, 1))
+		cidrEntries = append(cidrEntries, NewCustomCidrEntry(ipnet, 1, "US"))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Aggregate(cidrEntries)
+		_, _ = Aggregate(cidrEntries, mergeAddCount)
+	}
+}
+
+func BenchmarkAggregateMergeUseDeletNote(b *testing.B) {
+	input := []string{
+		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
+		"192.0.2.0/29", "192.0.2.8/29", "192.0.2.16/29", "192.0.2.24/29",
+		"192.0.2.32/29", "192.0.2.40/29", "192.0.2.48/29", "192.0.2.56/29",
+		"192.0.2.64/29", "192.0.2.72/29", "192.0.2.80/29", "192.0.2.88/29",
+		"2001:db8::/64", "2001:db8:0:2::/64", "2001:db8:0:3::/64", "2001:db8:0:1::/64",
+		"192.0.2.128/29", "192.0.2.136/29", "192.0.2.144/29", "192.0.2.152/29",
+		"192.0.2.192/29", "192.0.2.200/29", "192.0.2.208/29", "192.0.2.216/29",
+		"192.0.2.224/29", "192.0.2.232/29", "192.0.2.240/29", "192.0.2.248/29",
+		"2001:db8:0:4::/64", "192.0.2.171/32", "192.0.2.172/32", "192.0.2.174/32",
+		"192.0.2.169/32", "192.0.2.170/32", "192.0.2.173/32", "192.0.2.175/32",
+		"192.0.2.96/29", "192.0.2.104/29", "192.0.2.112/29", "192.0.2.120/29",
+	}
+
+	var cidrEntries []CidrEntry
+	for _, s := range input {
+		_, ipnet, _ := net.ParseCIDR(s)
+		cidrEntries = append(cidrEntries, NewCustomCidrEntry(ipnet, 10, "US"))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = Aggregate(cidrEntries, mergeUseDeleteNote)
+	}
+}
+
+func BenchmarkAggregateMergeDoNothing(b *testing.B) {
+	input := []string{
+		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
+		"192.0.2.0/29", "192.0.2.8/29", "192.0.2.16/29", "192.0.2.24/29",
+		"192.0.2.32/29", "192.0.2.40/29", "192.0.2.48/29", "192.0.2.56/29",
+		"192.0.2.64/29", "192.0.2.72/29", "192.0.2.80/29", "192.0.2.88/29",
+		"2001:db8::/64", "2001:db8:0:2::/64", "2001:db8:0:3::/64", "2001:db8:0:1::/64",
+		"192.0.2.128/29", "192.0.2.136/29", "192.0.2.144/29", "192.0.2.152/29",
+		"192.0.2.192/29", "192.0.2.200/29", "192.0.2.208/29", "192.0.2.216/29",
+		"192.0.2.224/29", "192.0.2.232/29", "192.0.2.240/29", "192.0.2.248/29",
+		"2001:db8:0:4::/64", "192.0.2.171/32", "192.0.2.172/32", "192.0.2.174/32",
+		"192.0.2.169/32", "192.0.2.170/32", "192.0.2.173/32", "192.0.2.175/32",
+		"192.0.2.96/29", "192.0.2.104/29", "192.0.2.112/29", "192.0.2.120/29",
+	}
+
+	var cidrEntries []CidrEntry
+	for _, s := range input {
+		_, ipnet, _ := net.ParseCIDR(s)
+		cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = Aggregate(cidrEntries, mergeDoNothing)
 	}
 }

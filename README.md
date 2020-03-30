@@ -92,7 +92,6 @@ func main() {
 ```
 
 BenchMark with following string
-
 ```
     input := []string{
 		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
@@ -113,5 +112,7 @@ BenchMark with following string
 goos: darwin
 goarch: amd64
 pkg: github.com/ldkingvivi/go-aggregate
-BenchmarkAggregateIPNet-12    	   61604	     18624 ns/op	   18056 B/op	     204 allocs/op
+BenchmarkAggregateMergeAddCount-12        	   65290	     17640 ns/op	   18056 B/op	     204 allocs/op
+BenchmarkAggregateMergeUseDeletNote-12    	   66913	     17600 ns/op	   18056 B/op	     204 allocs/op
+BenchmarkAggregateMergeDoNothing-12       	   67716	     17702 ns/op	   18056 B/op	     204 allocs/op	     204 allocs/op
 ```
