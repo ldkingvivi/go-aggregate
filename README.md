@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/ldkingvivi/go-aggregate.png?branch=master)](https://travis-ci.org/ldkingvivi/go-aggregate)
 [![codecov](https://codecov.io/gh/ldkingvivi/go-aggregate/branch/master/graph/badge.svg)](https://codecov.io/gh/ldkingvivi/go-aggregate)
 
-this is the go implementation of the original aggregate from [@horms]( https://github.com/horms) on linux back in 2002
+this is the go implementation of the original aggregate from [@horms]( https://github.com/horms) on linux back in 2002, but more generic, you can implement the interface and make it very flexible
 
 ```
 package main
