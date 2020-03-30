@@ -58,12 +58,6 @@ func Aggregate(cidrEntries []CidrEntry) ([]CidrEntry, error) {
 	if len(cidrEntries) < 2 {
 		return cidrEntries, nil
 	}
-	cidrs := run(cidrEntries)
-	return getEntries(cidrs), nil
-}
-
-func run(cidrEntries []CidrEntry) []cidr {
-	// convert
 	cidrs := convertToCidr(cidrEntries)
 	// sort it
 	sortIt(cidrs)
@@ -74,7 +68,7 @@ func run(cidrEntries []CidrEntry) []cidr {
 	// do the aggregate
 	aggregateAdj(cidrs)
 
-	return cidrs
+	return getEntries(cidrs), nil
 }
 
 func convertToCidr(cidrEntries []CidrEntry) []cidr {
