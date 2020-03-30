@@ -18,7 +18,7 @@ import (
 type customCidrEntry struct {
 	ipNet *net.IPNet
 	count int
-	xxx   string
+	note  string
 }
 
 func (c *customCidrEntry) GetNetwork() *net.IPNet {
@@ -29,62 +29,61 @@ func (c *customCidrEntry) SetNetwork(ipNet *net.IPNet) {
 	c.ipNet = ipNet
 }
 
-func (c *customCidrEntry) GetCount() int {
-	return c.count
-}
-
-func (c *customCidrEntry) SetCount(count int) {
-	c.count = count
-}
-
-func NewCustomCidrEntry(ipNet *net.IPNet, count int, xxx string) agg.CidrEntry {
+func NewCustomCidrEntry(ipNet *net.IPNet, count int, note string) agg.CidrEntry {
 	return &customCidrEntry{
 		ipNet: ipNet,
 		count: count,
-		xxx:   xxx,
+		note:  note,
 	}
 }
 
 func main() {
 
-	// example use NewBasicCidrEntry
+	// example use NewBasicCidrEntry for basic aggregate
 	_, aNet, err := net.ParseCIDR("8.8.8.0/25")
-	a := agg.NewBasicCidrEntry(aNet, 10)
+	a := agg.NewBasicCidrEntry(aNet)
 
 	_, bNet, err := net.ParseCIDR("9.9.9.0/25")
-	b := agg.NewBasicCidrEntry(bNet, 20)
+	b := agg.NewBasicCidrEntry(bNet)
 
 	_, cNet, err := net.ParseCIDR("8.8.8.128/25")
-	c := agg.NewBasicCidrEntry(cNet, 30)
+	c := agg.NewBasicCidrEntry(cNet)
 
-	result, err := agg.Aggregate([]agg.CidrEntry{a, b, c})
+	// empty merge func will do the basic merge
+	result, err := agg.Aggregate([]agg.CidrEntry{a, b, c}, func(_, _ agg.CidrEntry) {})
 	if err != nil {
 		log.Printf("%+v", err)
 	} else {
 		for _, cidr := range result {
-			log.Printf("%s count : %d", cidr.GetNetwork(), cidr.GetCount())
-			//2020/03/29 22:02:12 8.8.8.0/24 count : 40
-			//2020/03/29 22:02:12 9.9.9.0/25 count : 20
+			log.Printf("%s", cidr.GetNetwork())
+			//2020/03/29 22:02:12 8.8.8.0/24
+			//2020/03/29 22:02:12 9.9.9.0/25
 		}
 	}
 
-	// example use custom interface
+	// example use custom interface with client's own merge logic
 	_, xNet, _ := net.ParseCIDR("8.8.8.128/25")
 	_, yNet, _ := net.ParseCIDR("8.8.8.0/25")
 
 	x := NewCustomCidrEntry(xNet, 10, "US")
 	y := NewCustomCidrEntry(yNet, 20, "US")
 
-	result, err = agg.Aggregate([]agg.CidrEntry{x, y})
+	// add CIDR's count when merged
+	result, err = agg.Aggregate([]agg.CidrEntry{x, y}, func(keep, delete agg.CidrEntry) {
+		specificKeep, _ := keep.(*customCidrEntry)
+		specificDelete, _ := delete.(*customCidrEntry)
+		specificKeep.count += specificDelete.count
+	})
+
 	if err != nil {
 		log.Printf("%+v", err)
 	} else {
 		for _, cidr := range result {
 			custom, ok := cidr.(*customCidrEntry)
 			if ok {
-				log.Printf("%s count : %d with xxx: %s",
-					custom.GetNetwork(), custom.GetCount(), custom.xxx)
-				// 2020/03/29 22:25:10 8.8.8.0/24 count : 30 with xxx: US
+				log.Printf("%s count : %d with note: %s",
+					custom.GetNetwork(), custom.count, custom.note)
+				//2020/03/29 22:25:10 8.8.8.0/24 count : 30 with note: US
 			}
 		}
 	}
