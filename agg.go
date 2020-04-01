@@ -44,9 +44,9 @@ func NewBasicCidrEntry(ipNet *net.IPNet) CidrEntry {
 
 type Merge func(keep, delete CidrEntry)
 
-func Aggregate(cidrEntries []CidrEntry, mergeFn Merge) ([]CidrEntry, error) {
+func Aggregate(cidrEntries []CidrEntry, mergeFn Merge) []CidrEntry {
 	if len(cidrEntries) < 2 {
-		return cidrEntries, nil
+		return cidrEntries
 	}
 	cidrs := convertToCidr(cidrEntries)
 	// sort it
@@ -58,7 +58,7 @@ func Aggregate(cidrEntries []CidrEntry, mergeFn Merge) ([]CidrEntry, error) {
 	// do the aggregate
 	aggregateAdj(cidrs, mergeFn)
 
-	return getEntries(cidrs), nil
+	return getEntries(cidrs)
 }
 
 func convertToCidr(cidrEntries []CidrEntry) []cidr {

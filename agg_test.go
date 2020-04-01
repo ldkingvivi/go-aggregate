@@ -94,7 +94,6 @@ func mergeDoNothing(_, _ CidrEntry) {
 func TestAggregateAddCount(t *testing.T) {
 
 	var got []CidrEntry
-	var err error
 
 	for i, c := range []struct {
 		in   []string
@@ -491,10 +490,7 @@ func TestAggregateAddCount(t *testing.T) {
 			cidrWant = append(cidrWant, NewCustomCidrEntry(ipnet, s.count, "US"))
 		}
 
-		got, err = Aggregate(cidrEntries, mergeAddCount)
-		if err != nil {
-			t.Errorf("%+v", err)
-		}
+		got = Aggregate(cidrEntries, mergeAddCount)
 
 		if !reflect.DeepEqual(got, cidrWant) {
 			t.Errorf("#%d: expect: %+v , but got %+v", i, cidrWant, got)
@@ -532,10 +528,7 @@ func TestAggregateWithGivenCount(t *testing.T) {
 		inputCidrs = append(inputCidrs, NewCustomCidrEntry(ipnet, s.count, "US"))
 	}
 
-	got, err := Aggregate(inputCidrs, mergeAddCount)
-	if err != nil {
-		t.Errorf("%+v", err)
-	}
+	got := Aggregate(inputCidrs, mergeAddCount)
 
 	var cidrWant []CidrEntry
 	for _, s := range want {
@@ -557,10 +550,7 @@ func TestAggregateWithMergeDeleteNote(t *testing.T) {
 	x := NewCustomCidrEntry(xNet, 10, "US")
 	y := NewCustomCidrEntry(yNet, 20, "CA")
 
-	got, err := Aggregate([]CidrEntry{x, y}, mergeUseDeleteNote)
-	if err != nil {
-		t.Errorf("%+v", err)
-	}
+	got := Aggregate([]CidrEntry{x, y}, mergeUseDeleteNote)
 
 	if len(got) != 1 {
 		t.Errorf("expect single results")
@@ -568,7 +558,7 @@ func TestAggregateWithMergeDeleteNote(t *testing.T) {
 
 	gotS, ok := got[0].(*customCidrEntry)
 	if !ok {
-		t.Errorf("%+v", err)
+		t.Errorf("error to map type back")
 	}
 
 	expect := "US"
@@ -596,10 +586,7 @@ func TestAggregateWithMergeDoNothing(t *testing.T) {
 		inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
 	}
 
-	got, err := Aggregate(inputCidrs, mergeDoNothing)
-	if err != nil {
-		t.Errorf("%+v", err)
-	}
+	got := Aggregate(inputCidrs, mergeDoNothing)
 
 	var cidrWant []CidrEntry
 	for _, s := range want {
@@ -635,7 +622,7 @@ func BenchmarkAggregateMergeAddCount(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Aggregate(cidrEntries, mergeAddCount)
+		_ = Aggregate(cidrEntries, mergeAddCount)
 	}
 }
 
@@ -662,7 +649,7 @@ func BenchmarkAggregateMergeUseDeletNote(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Aggregate(cidrEntries, mergeUseDeleteNote)
+		_ = Aggregate(cidrEntries, mergeUseDeleteNote)
 	}
 }
 
@@ -689,6 +676,6 @@ func BenchmarkAggregateMergeDoNothing(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Aggregate(cidrEntries, mergeDoNothing)
+		_ = Aggregate(cidrEntries, mergeDoNothing)
 	}
 }
