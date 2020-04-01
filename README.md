@@ -4,7 +4,43 @@
 [![Build Status](https://travis-ci.org/ldkingvivi/go-aggregate.png?branch=master)](https://travis-ci.org/ldkingvivi/go-aggregate)
 [![codecov](https://codecov.io/gh/ldkingvivi/go-aggregate/branch/master/graph/badge.svg)](https://codecov.io/gh/ldkingvivi/go-aggregate)
 
-this is the go implementation of the original aggregate from [@horms]( https://github.com/horms) on linux back in 2002, but more generic, you can implement the interface and make it very flexible
+# What is this
+This is the go implementation of the original aggregate from [@horms]( https://github.com/horms) on linux back in 2002, but more generic, you can implement the interface and make it very flexible
+
+### Basic Example
+
+```
+package main
+
+import (
+	agg "github.com/ldkingvivi/go-aggregate"
+	"log"
+	"net"
+)
+
+func main() {
+
+	// example use NewBasicCidrEntry for basic aggregate
+	_, aNet, _ := net.ParseCIDR("8.8.8.0/25")
+	a := agg.NewBasicCidrEntry(aNet)
+
+	_, bNet, _ := net.ParseCIDR("9.9.9.0/25")
+	b := agg.NewBasicCidrEntry(bNet)
+
+	_, cNet, _ := net.ParseCIDR("8.8.8.128/25")
+	c := agg.NewBasicCidrEntry(cNet)
+
+	// empty merge func will do the basic merge
+	result := agg.Aggregate([]agg.CidrEntry{a, b, c}, func(_, _ agg.CidrEntry) {})
+	for _, cidr := range result {
+		log.Printf("%s", cidr.GetNetwork())
+		//2020/03/29 22:02:12 8.8.8.0/24
+		//2020/03/29 22:02:12 9.9.9.0/25
+	}
+}
+```
+
+### Custom Struct Example
 
 ```
 package main
@@ -38,29 +74,6 @@ func NewCustomCidrEntry(ipNet *net.IPNet, count int, note string) agg.CidrEntry 
 }
 
 func main() {
-
-	// example use NewBasicCidrEntry for basic aggregate
-	_, aNet, err := net.ParseCIDR("8.8.8.0/25")
-	a := agg.NewBasicCidrEntry(aNet)
-
-	_, bNet, err := net.ParseCIDR("9.9.9.0/25")
-	b := agg.NewBasicCidrEntry(bNet)
-
-	_, cNet, err := net.ParseCIDR("8.8.8.128/25")
-	c := agg.NewBasicCidrEntry(cNet)
-
-	// empty merge func will do the basic merge
-	result, err := agg.Aggregate([]agg.CidrEntry{a, b, c}, func(_, _ agg.CidrEntry) {})
-	if err != nil {
-		log.Printf("%+v", err)
-	} else {
-		for _, cidr := range result {
-			log.Printf("%s", cidr.GetNetwork())
-			//2020/03/29 22:02:12 8.8.8.0/24
-			//2020/03/29 22:02:12 9.9.9.0/25
-		}
-	}
-
 	// example use custom interface with client's own merge logic
 	_, xNet, _ := net.ParseCIDR("8.8.8.128/25")
 	_, yNet, _ := net.ParseCIDR("8.8.8.0/25")
@@ -69,28 +82,25 @@ func main() {
 	y := NewCustomCidrEntry(yNet, 20, "US")
 
 	// add CIDR's count when merged
-	result, err = agg.Aggregate([]agg.CidrEntry{x, y}, func(keep, delete agg.CidrEntry) {
+	result := agg.Aggregate([]agg.CidrEntry{x, y}, func(keep, delete agg.CidrEntry) {
 		specificKeep, _ := keep.(*customCidrEntry)
 		specificDelete, _ := delete.(*customCidrEntry)
 		specificKeep.count += specificDelete.count
 	})
 
-	if err != nil {
-		log.Printf("%+v", err)
-	} else {
-		for _, cidr := range result {
-			custom, ok := cidr.(*customCidrEntry)
-			if ok {
-				log.Printf("%s count : %d with note: %s",
-					custom.GetNetwork(), custom.count, custom.note)
-				//2020/03/29 22:25:10 8.8.8.0/24 count : 30 with note: US
-			}
+	for _, cidr := range result {
+		custom, ok := cidr.(*customCidrEntry)
+		if ok {
+			log.Printf("%s count : %d with note: %s",
+				custom.GetNetwork(), custom.count, custom.note)
+			//2020/03/29 22:25:10 8.8.8.0/24 count : 30 with note: US
 		}
 	}
 }
+
 ```
 
-BenchMark with following string
+###BenchMark with following string
 ```
     input := []string{
 		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
