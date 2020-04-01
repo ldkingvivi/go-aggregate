@@ -100,7 +100,7 @@ func main() {
 
 ```
 
-###BenchMark with following string
+### BenchMark with following string
 ```
     input := []string{
 		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
