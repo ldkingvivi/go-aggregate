@@ -3,6 +3,7 @@ package Agg
 import (
 	"net"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -599,6 +600,36 @@ func TestAggregateWithMergeDoNothing(t *testing.T) {
 	}
 }
 
+func TestAggregateWithMergeDoNothing16M(t *testing.T) {
+	var inputCidrs []CidrEntry
+
+	var b, c, d int
+	var bStr, cStr, dStr string
+
+	for b = 0; b < 256; b++ {
+		bStr = strconv.Itoa(b)
+		for c = 0; c < 256; c++ {
+			cStr = strconv.Itoa(c)
+			for d = 0; d < 256; d++ {
+				dStr = strconv.Itoa(d)
+				_, ipnet, _ := net.ParseCIDR("1." + bStr + "." + cStr + "." + dStr + "/32")
+				inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
+			}
+		}
+	}
+
+	got := Aggregate(inputCidrs, mergeDoNothing)
+
+	var cidrWant []CidrEntry
+	_, ipnet, _ := net.ParseCIDR("1.0.0.0/8")
+	cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet))
+
+	if !reflect.DeepEqual(got, cidrWant) {
+		t.Errorf("expect: %+v , but got %+v", cidrWant, got)
+	}
+
+}
+
 func BenchmarkAggregateMergeAddCount(b *testing.B) {
 	input := []string{
 		"192.0.2.160/29", "192.0.2.176/29", "192.0.2.184/29", "192.0.2.168/32",
@@ -672,6 +703,30 @@ func BenchmarkAggregateMergeDoNothing(b *testing.B) {
 	for _, s := range input {
 		_, ipnet, _ := net.ParseCIDR(s)
 		cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Aggregate(cidrEntries, mergeDoNothing)
+	}
+}
+
+func BenchmarkAggregateMergeDoNothing16M(b *testing.B) {
+	var cidrEntries []CidrEntry
+
+	var x, c, d int
+	var bStr, cStr, dStr string
+
+	for x = 0; x < 256; x++ {
+		bStr = strconv.Itoa(x)
+		for c = 0; c < 256; c++ {
+			cStr = strconv.Itoa(c)
+			for d = 0; d < 256; d++ {
+				dStr = strconv.Itoa(d)
+				_, ipnet, _ := net.ParseCIDR("1." + bStr + "." + cStr + "." + dStr + "/32")
+				cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet))
+			}
+		}
 	}
 
 	b.ResetTimer()
