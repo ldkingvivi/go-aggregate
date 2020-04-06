@@ -600,28 +600,25 @@ func TestAggregateWithMergeDoNothing(t *testing.T) {
 	}
 }
 
-func TestAggregateWithMergeDoNothing16M(t *testing.T) {
+func TestAggregateWithMergeDoNothing65K(t *testing.T) {
 	var inputCidrs []CidrEntry
 
-	var b, c, d int
-	var bStr, cStr, dStr string
+	var c, d int
+	var cStr, dStr string
 
-	for b = 0; b < 256; b++ {
-		bStr = strconv.Itoa(b)
-		for c = 0; c < 256; c++ {
-			cStr = strconv.Itoa(c)
-			for d = 0; d < 256; d++ {
-				dStr = strconv.Itoa(d)
-				_, ipnet, _ := net.ParseCIDR("1." + bStr + "." + cStr + "." + dStr + "/32")
-				inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
-			}
+	for c = 0; c < 256; c++ {
+		cStr = strconv.Itoa(c)
+		for d = 0; d < 256; d++ {
+			dStr = strconv.Itoa(d)
+			_, ipnet, _ := net.ParseCIDR("1.1." + cStr + "." + dStr + "/32")
+			inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
 		}
 	}
 
 	got := Aggregate(inputCidrs, mergeDoNothing)
 
 	var cidrWant []CidrEntry
-	_, ipnet, _ := net.ParseCIDR("1.0.0.0/8")
+	_, ipnet, _ := net.ParseCIDR("1.1.0.0/16")
 	cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet))
 
 	if !reflect.DeepEqual(got, cidrWant) {
