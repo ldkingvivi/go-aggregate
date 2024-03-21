@@ -3,11 +3,12 @@ package Agg
 import (
 	"math/big"
 	"net"
+	"net/netip"
 	"sort"
 )
 
 type cidr struct {
-	netIP       net.IP
+	netIP       netip.Addr
 	startIP     *big.Int
 	nextStartIP *big.Int // this is end IP + 1
 	ones        int
@@ -20,23 +21,23 @@ type cidr struct {
 }
 
 type CidrEntry interface {
-	GetNetwork() *net.IPNet
-	SetNetwork(*net.IPNet)
+	GetNetwork() netip.Prefix
+	SetNetwork(netip.Prefix)
 }
 
 type basicCidrEntry struct {
-	ipNet *net.IPNet
+	ipNet netip.Prefix
 }
 
-func (b *basicCidrEntry) GetNetwork() *net.IPNet {
+func (b *basicCidrEntry) GetNetwork() netip.Prefix {
 	return b.ipNet
 }
 
-func (b *basicCidrEntry) SetNetwork(ipNet *net.IPNet) {
+func (b *basicCidrEntry) SetNetwork(ipNet netip.Prefix) {
 	b.ipNet = ipNet
 }
 
-func NewBasicCidrEntry(ipNet *net.IPNet) CidrEntry {
+func NewBasicCidrEntry(ipNet netip.Prefix) CidrEntry {
 	return &basicCidrEntry{
 		ipNet: ipNet,
 	}
@@ -64,25 +65,26 @@ func Aggregate(cidrEntries []CidrEntry, mergeFn Merge) []CidrEntry {
 func convertToCidr(cidrEntries []CidrEntry) []cidr {
 	var cidrs []cidr
 	bigOne := big.NewInt(1)
-	var ipnet *net.IPNet
+	var ipnet netip.Prefix
 	// convert
 	for _, cidrEntry := range cidrEntries {
-		ipnet = cidrEntry.GetNetwork()
+		ipnet = cidrEntry.GetNetwork().Masked()
 
 		// cover IPv6
 		startIP := big.NewInt(0)
-		startIP.SetBytes(ipnet.IP)
+		startIP.SetBytes(ipnet.Addr().AsSlice())
 
 		nextStartIP := big.NewInt(0)
 
-		ones, bits := ipnet.Mask.Size()
+		ones := ipnet.Bits()
+		bits := ipnet.Addr().BitLen()
 		diff := uint(bits) - uint(ones)
 
 		nextStartIP.Lsh(bigOne, diff)
 		nextStartIP.Add(nextStartIP, startIP)
 
 		cidrs = append(cidrs, cidr{
-			netIP:       ipnet.IP,
+			netIP:       ipnet.Addr(),
 			startIP:     startIP,
 			nextStartIP: nextStartIP,
 			ones:        ones,
@@ -183,11 +185,8 @@ func getEntries(cidrs []cidr) []CidrEntry {
 	currentP := &cidrs[0]
 	for currentP != nil {
 		// update the entry network
-		currentP.entry.SetNetwork(
-			&net.IPNet{
-				IP:   currentP.netIP,
-				Mask: net.CIDRMask(currentP.ones, currentP.bits),
-			})
+		prefix := netip.PrefixFrom(currentP.netIP, currentP.ones)
+		currentP.entry.SetNetwork(prefix)
 		// added to results
 		r = append(r, currentP.entry)
 		// move to next
@@ -196,18 +195,41 @@ func getEntries(cidrs []cidr) []CidrEntry {
 	return r
 }
 
-func getIPPrefix(ip net.IP) int {
+func getIPPrefix(ip netip.Addr) int {
 
-	if ip.To4() != nil {
+	if ip.Is4() {
 		// ipv4
-		return net.IPv4len*8 - getTrailingZero(ip)
+		return net.IPv4len*8 - getTrailingZeroV4(ip.As4())
 	} else {
 		// ipv6
-		return net.IPv6len*8 - getTrailingZero(ip)
+		return net.IPv6len*8 - getTrailingZeroV6(ip.As16())
 	}
 }
 
-func getTrailingZero(ip net.IP) int {
+func getTrailingZeroV4(ip [4]byte) int {
+	var n int
+	var v byte
+
+	i := len(ip) - 1
+	for i >= 0 {
+		v = ip[i]
+		if v == 0x00 {
+			n += 8
+			i--
+			continue
+		}
+		// found non-00 byte
+		// count 0 bits
+		for v&0x01 != 1 {
+			n++
+			v >>= 1
+		}
+		break
+	}
+	return n
+}
+
+func getTrailingZeroV6(ip [16]byte) int {
 	var n int
 	var v byte
 

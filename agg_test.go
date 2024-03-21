@@ -1,39 +1,40 @@
 package Agg
 
 import (
-	"net"
+	"net/netip"
 	"reflect"
 	"strconv"
 	"testing"
 )
 
 func TestGetIPPrefix(t *testing.T) {
-	ip1 := net.IPv4(0, 0, 0, 0)
+	ip1 := netip.MustParseAddr("0.0.0.0")
 
 	got1 := getIPPrefix(ip1)
 	if got1 != 0 {
 		t.Errorf("expect 0 but got %+v", got1)
 	}
 
-	ip2 := net.IPv4(8, 8, 8, 0)
+	ip2 := netip.MustParseAddr("8.8.8.0")
 	got2 := getIPPrefix(ip2)
 	if got2 != 21 {
 		t.Errorf("expect 21 but got %+v", got2)
 	}
 
-	ip3 := net.IPv4(8, 8, 8, 8)
+	ip3 := netip.MustParseAddr("8.8.8.8")
 	got3 := getIPPrefix(ip3)
 	if got3 != 29 {
 		t.Errorf("expect 29 but got %+v", got3)
 	}
 
-	ip4, ipnet4, _ := net.ParseCIDR("2620:108:700f::3645:f643/64")
+	ip4 := netip.MustParseAddr("2620:108:700f::3645:f643")
 	got4 := getIPPrefix(ip4)
 	if got4 != 128 {
 		t.Errorf("expect 128 but got %+v", got4)
 	}
 
-	got5 := getIPPrefix(ipnet4.IP)
+	ipnet4 := netip.MustParsePrefix("2620:108:700f::3645:f643/64")
+	got5 := getIPPrefix(ipnet4.Masked().Addr())
 	if got5 != 48 {
 		t.Errorf("expect 48 but got %+v", got5)
 	}
@@ -45,16 +46,16 @@ type testResults struct {
 }
 
 type customCidrEntry struct {
-	ipNet *net.IPNet
+	ipNet netip.Prefix
 	count int
 	note  string
 }
 
-func (c *customCidrEntry) GetNetwork() *net.IPNet {
+func (c *customCidrEntry) GetNetwork() netip.Prefix {
 	return c.ipNet
 }
 
-func (c *customCidrEntry) SetNetwork(ipNet *net.IPNet) {
+func (c *customCidrEntry) SetNetwork(ipNet netip.Prefix) {
 	c.ipNet = ipNet
 }
 
@@ -66,7 +67,7 @@ func (c *customCidrEntry) SetCount(count int) {
 	c.count = count
 }
 
-func NewCustomCidrEntry(ipNet *net.IPNet, count int, note string) CidrEntry {
+func NewCustomCidrEntry(ipNet netip.Prefix, count int, note string) CidrEntry {
 	return &customCidrEntry{
 		ipNet: ipNet,
 		count: count,
@@ -482,12 +483,12 @@ func TestAggregateAddCount(t *testing.T) {
 		var cidrWant []CidrEntry
 
 		for _, s := range c.in {
-			_, ipnet, _ := net.ParseCIDR(s)
+			ipnet := netip.MustParsePrefix(s)
 			cidrEntries = append(cidrEntries, NewCustomCidrEntry(ipnet, 1, "US"))
 		}
 
 		for _, s := range c.want {
-			_, ipnet, _ := net.ParseCIDR(s.ipnetString)
+			ipnet := netip.MustParsePrefix(s.ipnetString)
 			cidrWant = append(cidrWant, NewCustomCidrEntry(ipnet, s.count, "US"))
 		}
 
@@ -525,7 +526,7 @@ func TestAggregateWithGivenCount(t *testing.T) {
 
 	var inputCidrs []CidrEntry
 	for _, s := range input {
-		_, ipnet, _ := net.ParseCIDR(s.ipnetString)
+		ipnet := netip.MustParsePrefix(s.ipnetString)
 		inputCidrs = append(inputCidrs, NewCustomCidrEntry(ipnet, s.count, "US"))
 	}
 
@@ -533,7 +534,7 @@ func TestAggregateWithGivenCount(t *testing.T) {
 
 	var cidrWant []CidrEntry
 	for _, s := range want {
-		_, ipnet, _ := net.ParseCIDR(s.ipnetString)
+		ipnet := netip.MustParsePrefix(s.ipnetString)
 		cidrWant = append(cidrWant, NewCustomCidrEntry(ipnet, s.count, "US"))
 	}
 
@@ -545,8 +546,8 @@ func TestAggregateWithGivenCount(t *testing.T) {
 func TestAggregateWithMergeDeleteNote(t *testing.T) {
 
 	// example use custom interface
-	_, xNet, _ := net.ParseCIDR("8.8.8.128/25")
-	_, yNet, _ := net.ParseCIDR("8.8.8.0/25")
+	xNet := netip.MustParsePrefix("8.8.8.128/25")
+	yNet := netip.MustParsePrefix("8.8.8.0/25")
 
 	x := NewCustomCidrEntry(xNet, 10, "US")
 	y := NewCustomCidrEntry(yNet, 20, "CA")
@@ -583,7 +584,7 @@ func TestAggregateWithMergeDoNothing(t *testing.T) {
 
 	var inputCidrs []CidrEntry
 	for _, s := range input {
-		_, ipnet, _ := net.ParseCIDR(s)
+		ipnet := netip.MustParsePrefix(s)
 		inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
 	}
 
@@ -591,7 +592,7 @@ func TestAggregateWithMergeDoNothing(t *testing.T) {
 
 	var cidrWant []CidrEntry
 	for _, s := range want {
-		_, ipnet, _ := net.ParseCIDR(s)
+		ipnet := netip.MustParsePrefix(s)
 		cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet))
 	}
 
@@ -610,7 +611,7 @@ func TestAggregateWithMergeDoNothing65K(t *testing.T) {
 		cStr = strconv.Itoa(c)
 		for d = 0; d < 256; d++ {
 			dStr = strconv.Itoa(d)
-			_, ipnet, _ := net.ParseCIDR("1.1." + cStr + "." + dStr + "/32")
+			ipnet := netip.MustParsePrefix("1.1." + cStr + "." + dStr + "/32")
 			inputCidrs = append(inputCidrs, NewBasicCidrEntry(ipnet))
 		}
 	}
@@ -618,7 +619,7 @@ func TestAggregateWithMergeDoNothing65K(t *testing.T) {
 	got := Aggregate(inputCidrs, mergeDoNothing)
 
 	var cidrWant []CidrEntry
-	_, ipnet, _ := net.ParseCIDR("1.1.0.0/16")
+	ipnet := netip.MustParsePrefix("1.1.0.0/16")
 	cidrWant = append(cidrWant, NewBasicCidrEntry(ipnet))
 
 	if !reflect.DeepEqual(got, cidrWant) {
@@ -644,7 +645,7 @@ func BenchmarkAggregateMergeAddCount(b *testing.B) {
 
 	var cidrEntries []CidrEntry
 	for _, s := range input {
-		_, ipnet, _ := net.ParseCIDR(s)
+		ipnet := netip.MustParsePrefix(s)
 		cidrEntries = append(cidrEntries, NewCustomCidrEntry(ipnet, 1, "US"))
 	}
 
@@ -671,7 +672,7 @@ func BenchmarkAggregateMergeUseDeletNote(b *testing.B) {
 
 	var cidrEntries []CidrEntry
 	for _, s := range input {
-		_, ipnet, _ := net.ParseCIDR(s)
+		ipnet := netip.MustParsePrefix(s)
 		cidrEntries = append(cidrEntries, NewCustomCidrEntry(ipnet, 10, "US"))
 	}
 
@@ -698,7 +699,7 @@ func BenchmarkAggregateMergeDoNothing(b *testing.B) {
 
 	var cidrEntries []CidrEntry
 	for _, s := range input {
-		_, ipnet, _ := net.ParseCIDR(s)
+		ipnet := netip.MustParsePrefix(s)
 		cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet))
 	}
 
@@ -720,7 +721,7 @@ func BenchmarkAggregateMergeDoNothing16M(b *testing.B) {
 			cStr = strconv.Itoa(c)
 			for d = 0; d < 256; d++ {
 				dStr = strconv.Itoa(d)
-				_, ipnet, _ := net.ParseCIDR("1." + bStr + "." + cStr + "." + dStr + "/32")
+				ipnet := netip.MustParsePrefix("1." + bStr + "." + cStr + "." + dStr + "/32")
 				cidrEntries = append(cidrEntries, NewBasicCidrEntry(ipnet))
 			}
 		}
